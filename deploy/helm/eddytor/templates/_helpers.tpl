@@ -17,10 +17,9 @@
 {{- end -}}
 {{- end -}}
 
-{{/* FIXED component names — NOT release-prefixed. The server proxy hardcodes
-     the engine Service names `eddytor-engine` / `eddytor-engine-headless` for
-     its HTTP, MCP and Flight paths (crates/server/src/proxy.rs), so these must
-     match verbatim. One Eddytor release per namespace (as in production). */}}
+{{/* FIXED, NOT release-prefixed: the server proxy hardcodes the engine Service
+     names `eddytor-engine` / `eddytor-engine-headless`, so they must match
+     verbatim. One Eddytor release per namespace. */}}
 {{- define "eddytor.server.name" -}}eddytor-server{{- end -}}
 {{- define "eddytor.engine.name" -}}eddytor-engine{{- end -}}
 {{- define "eddytor.engine.headlessName" -}}eddytor-engine-headless{{- end -}}
