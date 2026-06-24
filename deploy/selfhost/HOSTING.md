@@ -343,6 +343,9 @@ helm install eddytor oci://ghcr.io/nordalf/charts/eddytor -n eddytor \
 
 > Bundled single-replica Postgres/Garage are **evaluation only** — no HA, no
 > backups. Use external, backed-up datastores and real secrets in production.
+> Note `postgres.bundled=true` does not rewrite your connection string — keep
+> `EDDYTOR_DATABASE_URL` pointed at the in-cluster service
+> (`postgres://eddytor:eddytor@eddytor-postgres:5432/eddytor`), as the example above does.
 
 The `-p "8080:30080@server:0"` flag is what maps the host's `localhost:8080` onto
 the NodePort — that's a **k3d** feature, so the example above assumes k3d.

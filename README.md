@@ -25,8 +25,14 @@ kubectl -n eddytor create secret generic eddytor-secrets \
 ```
 
 Pass `--set secrets.existingSecret=eddytor-secrets` to `helm install`.
-Only when you bundle the demo Garage (`--set garage.bundled=true`, eval
-only) also supply its four creds — `accessKey` must be `GK` + 32 hex:
+
+For quick testing — no external datastores — bundle a Postgres and an
+object store that come up alongside the chart (eval only, no HA/backups):
+
+- `--set postgres.bundled=true` runs an in-cluster Postgres. Point your
+  `EDDYTOR_DATABASE_URL` at it: `postgres://eddytor:eddytor@eddytor-postgres:5432/eddytor`.
+- `--set garage.bundled=true` runs an in-cluster S3 (Garage). It also
+  needs its four creds — `accessKey` must be `GK` + 32 hex:
 
 ```bash
   --set-string garage.accessKey="GK$(openssl rand -hex 16)" \
@@ -35,4 +41,4 @@ only) also supply its four creds — `accessKey` must be `GK` + 32 hex:
   --set-string garage.adminToken="$(openssl rand -base64 32)"
 ```
 
-Current version: **v2.4.2** (see the matching `v2.4.2` git tag).
+Current version: **v2.4.3** (see the matching `v2.4.3` git tag).
