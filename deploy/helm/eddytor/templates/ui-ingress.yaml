@@ -1,0 +1,34 @@
+{{- if and .Values.ui.enabled .Values.ui.ingress.enabled }}
+# The UI runs on its own origin, so it gets its own Ingress host routed to
+# ui:3000 (separate from the server Ingress). ui.ingress.host must match the
+# host in ui.origin.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "eddytor.ui.name" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+  {{- with .Values.ui.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ui.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ui.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ required "ui.ingress.host is required when ui.ingress.enabled" .Values.ui.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "eddytor.ui.name" . }}
+                port:
+                  number: 3000
+{{- end }}

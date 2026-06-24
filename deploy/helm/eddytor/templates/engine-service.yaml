@@ -1,0 +1,46 @@
+# ClusterIP service — in-cluster clients reach the engine here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "eddytor.engine.name" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+    app: {{ include "eddytor.engine.name" . }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ include "eddytor.engine.name" . }}
+  ports:
+    - port: 50051
+      targetPort: 50051
+      name: grpc
+    - port: 50052
+      targetPort: 50052
+      name: grpc-flight
+    - port: 50053
+      targetPort: 50053
+      name: http-mcp
+---
+# Headless service — the server resolves its A records to fan out across engine
+# replicas (EDDYTOR__SESSION__SERVICE_NAME points here).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "eddytor.engine.headlessName" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+    app: {{ include "eddytor.engine.name" . }}
+spec:
+  clusterIP: None
+  selector:
+    app: {{ include "eddytor.engine.name" . }}
+  ports:
+    - port: 50051
+      targetPort: 50051
+      name: grpc
+    - port: 50052
+      targetPort: 50052
+      name: grpc-flight
+    - port: 50053
+      targetPort: 50053
+      name: http-mcp

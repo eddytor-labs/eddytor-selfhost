@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "eddytor.fullname" . }}-test-healthz
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: healthz
+      image: {{ .Values.waitForDb.image | quote }}
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          echo "server /healthz"; wget -qO- http://{{ include "eddytor.server.name" . }}:8080/healthz
+          echo "engine /healthz"; wget -qO- http://{{ include "eddytor.engine.name" . }}:50051/healthz
+          # JWKS must be served with at least one key — the engine fetches this
+          # to validate user JWTs; an empty/unreachable JWKS silently 401s every
+          # token-based request (the engine-JWKS class of bug).
+          echo "server JWKS"
+          wget -qO- http://{{ include "eddytor.server.name" . }}:8080/.well-known/jwks.json | grep -q '"keys"' \
+            || { echo "JWKS missing or empty"; exit 1; }
+          # Engine must reject an unauthenticated proxied request (auth is wired,
+          # not open) — proves the engine's bearer enforcement is active.
+          code=$(wget -qO- -S http://{{ include "eddytor.engine.name" . }}:50051/api/v1/storages/tables 2>&1 | grep -c '401') || true
+          [ "$code" -ge 1 ] || { echo "engine did not 401 an unauth request"; exit 1; }
+          echo "all checks passed"

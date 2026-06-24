@@ -1,0 +1,27 @@
+{{- if .Values.server.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "eddytor.server.name" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.server.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app: {{ include "eddytor.server.name" . }}
+{{- end }}
+{{- if .Values.engine.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "eddytor.engine.name" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.engine.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app: {{ include "eddytor.engine.name" . }}
+{{- end }}

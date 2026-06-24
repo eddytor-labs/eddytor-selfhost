@@ -1,0 +1,76 @@
+Eddytor {{ .Chart.AppVersion }} installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Components:
+  server  → {{ .Values.server.replicas }} replica(s){{ if .Values.server.autoscaling.enabled }} (HPA {{ .Values.server.autoscaling.minReplicas }}-{{ .Values.server.autoscaling.maxReplicas }}){{ end }}, ports 8080/8082
+  engine  → {{ .Values.engine.replicas }} replica(s){{ if .Values.engine.autoscaling.enabled }} (HPA {{ .Values.engine.autoscaling.minReplicas }}-{{ .Values.engine.autoscaling.maxReplicas }}){{ end }}, ports 50051/50052/50053
+{{- if .Values.postgres.bundled }}
+  postgres→ bundled (demo only — not for production)
+{{- end }}
+{{- if .Values.garage.bundled }}
+  garage  → bundled, bucket "{{ .Values.garage.bucket }}" (demo only — not for production)
+{{- end }}
+{{- if .Values.ui.enabled }}
+  ui      → enabled, origin {{ .Values.ui.origin }} (port 3000{{ if and (eq .Values.ui.service.type "NodePort") .Values.ui.service.nodePort }}, NodePort {{ .Values.ui.service.nodePort }}{{ end }})
+{{- end }}
+
+{{- if and .Values.ingress.enabled (contains "localhost" .Values.config.publicUrl) }}
+
+⚠  config.publicUrl is still "{{ .Values.config.publicUrl }}" but ingress is enabled.
+   publicUrl drives cookies, OAuth redirects, and the JWKS issuer — users hitting
+   {{ .Values.ingress.host }} with a localhost publicUrl will fail sign-in. Set
+   --set config.publicUrl=https://{{ .Values.ingress.host }} (and cookieDomain).
+{{- end }}
+
+Watch rollout:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "eddytor.server.name" . }}
+
+Scale the engine under load:
+  kubectl -n {{ .Release.Namespace }} scale deploy/{{ include "eddytor.engine.name" . }} --replicas=5
+
+─────────────────────────────────────────────────────────────────────────────
+GET STARTED   (namespace: {{ .Release.Namespace }})
+
+1) Reach the server.
+{{- if .Values.ingress.enabled }}
+   Ingress is on — open: https://{{ .Values.ingress.host }}/
+{{- else }}
+   Port-forward (works on ANY cluster, incl. minikube / Docker Desktop where
+   NodePorts are NOT on localhost):
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "eddytor.server.name" . }} 8080:8080
+   → server now at {{ .Values.config.publicUrl }}
+{{- if and (eq .Values.server.service.type "NodePort") .Values.server.service.nodePort }}
+   (Also on NodePort {{ .Values.server.service.nodePort }} — reachable directly
+    only where the node IP is routable, e.g. k3d `-p "8080:{{ .Values.server.service.nodePort }}@server:0"`.)
+{{- end }}
+{{- end }}
+{{- if .Values.ui.enabled }}
+
+   Web UI — port-forward it too (browser origin must match {{ .Values.ui.origin }}):
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "eddytor.ui.name" . }} 3000:3000
+{{- end }}
+
+2) Create the first admin — runs INSIDE the server pod (kubeadm model; no public
+   endpoint, no token):
+     kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "eddytor.server.name" . }} -- \
+       eddytoradm setup --email you@example.com --org "Default"
+
+3) Sign in.{{ if .Values.ui.enabled }} Browser: open {{ .Values.ui.origin }}.{{ end }} CLI:
+     eddytor config set-api-url {{ .Values.config.publicUrl }}
+     eddytor login            # magic-link; with SMTP unset the link prints to:
+     #   kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "eddytor.server.name" . }} | grep -i 'sign in' -A2
+   Headless key instead (no browser):
+     kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "eddytor.server.name" . }} -- \
+       eddytoradm create-api-key --email you@example.com
+{{- if .Values.garage.bundled }}
+
+4) Register the bundled Garage so you can create tables (in-cluster Service
+   name + chart demo creds — override garage.accessKey/secretKey for real use):
+     eddytor create storage s3 --bucket {{ .Values.garage.bucket }} \
+       --endpoint http://{{ include "eddytor.garage.name" . }}:3900 --region {{ .Values.garage.region }} \
+       --access-key-id {{ .Values.garage.accessKey }} --secret-access-key {{ .Values.garage.secretKey }}
+{{- end }}
+
+{{ if .Values.garage.bundled }}5{{ else }}4{{ end }}) Bulk query (`eddytor query`) — Flight SQL on port 8082 (ClusterIP only):
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "eddytor.server.name" . }} 8082:8082
+     eddytor config set-flight-url http://localhost:8082
+─────────────────────────────────────────────────────────────────────────────

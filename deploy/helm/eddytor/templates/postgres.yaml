@@ -1,0 +1,82 @@
+{{- if .Values.postgres.bundled }}
+# Bundled single-replica Postgres — demos/local only. No HA, no backups.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "eddytor.postgres.name" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+    app: {{ include "eddytor.postgres.name" . }}
+spec:
+  selector:
+    app: {{ include "eddytor.postgres.name" . }}
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "eddytor.postgres.name" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+    app: {{ include "eddytor.postgres.name" . }}
+spec:
+  serviceName: {{ include "eddytor.postgres.name" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "eddytor.postgres.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "eddytor.postgres.name" . }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image | quote }}
+          # No runAsNonRoot/readOnlyRootFilesystem: the postgres image starts as
+          # root then drops to the postgres user, and writes its data dir.
+          # Drop ALL, then add back only what the entrypoint needs: CHOWN/FOWNER/
+          # DAC_OVERRIDE to chown the data dir on a fresh PV (real CSI volumes —
+          # azuredisk/EBS/PD — mount root-owned, unlike local hostPath), and
+          # SETGID/SETUID for the gosu drop to the postgres user. Without these
+          # the chown fails with EPERM and Postgres crash-loops.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "FOWNER", "DAC_OVERRIDE", "SETGID", "SETUID"]
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.postgres.password | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.database | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgres.user | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.postgres.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage }}
+{{- end }}

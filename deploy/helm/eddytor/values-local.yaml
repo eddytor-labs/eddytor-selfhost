@@ -1,0 +1,81 @@
+# Evaluation overlay for a throwaway local cluster (k3d/kind/minikube/Docker
+# Desktop). NOT for production.
+#
+# Bundles Postgres + Garage, single replicas, autoscaling/PDB off, NodePort so a
+# host port map can reach the server. The secrets below are DEMO PLACEHOLDERS —
+# fine for a throwaway eval, never for real data. For anything you keep, supply
+# real secrets (secrets.existingSecret or your own values file).
+
+# Inherit the chart's k8s-edition tag (values.yaml: tag=k8s) — the kubernetes
+# build is REQUIRED for DNS engine discovery; `latest` is the community edition
+# and the server would never find the engine. IfNotPresent lets a locally-built
+# image win if present; to test a local build, tag it `:k8s` and
+# `minikube image load` it (or pass --set image.tag=<your-tag>).
+image:
+  pullPolicy: IfNotPresent
+
+config:
+  publicUrl: "http://localhost:8080"
+  cookieDomain: "localhost"
+  cors:
+    allowedOrigins: "http://localhost:*"
+
+secrets:
+  values:
+    EDDYTOR_DATABASE_URL: "postgres://eddytor:eddytor@eddytor-postgres:5432/eddytor"
+    # Demo placeholders — replace for anything beyond a throwaway eval.
+    EDDYTOR_API_KEY_SECRET: "local-dev-only-demo-apikey-secret-change-me"
+    EDDYTOR_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="  # base64 of 32 zero bytes
+    EDDYTOR_SMTP_HOST: ""  # noop mail backend => magic links print to server logs
+
+server:
+  replicas: 1
+  autoscaling:
+    enabled: false
+  pdb:
+    enabled: false
+  service:
+    type: NodePort
+    nodePort: 30080
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+engine:
+  replicas: 1
+  autoscaling:
+    enabled: false
+  pdb:
+    enabled: false
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+waitForDb:
+  enabled: true
+
+postgres:
+  bundled: true
+  storage: 2Gi
+
+garage:
+  bundled: true
+  storage: 5Gi
+
+# Web UI on a NodePort so a host port-map can reach it (origin must match the
+# port you expose it on). publicUrl stays the server's localhost:8080.
+ui:
+  enabled: true
+  origin: "http://localhost:3000"
+  apiBaseUrl: "http://localhost:8080"
+  service:
+    type: NodePort
+    nodePort: 30300

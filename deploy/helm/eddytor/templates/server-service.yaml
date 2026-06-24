@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "eddytor.server.name" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+    app: {{ include "eddytor.server.name" . }}
+spec:
+  type: {{ .Values.server.service.type }}
+  {{- with .Values.server.service.sessionAffinity }}
+  sessionAffinity: {{ . }}
+  {{- if eq . "ClientIP" }}
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  {{- end }}
+  {{- end }}
+  selector:
+    app: {{ include "eddytor.server.name" . }}
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+      {{- if and (eq .Values.server.service.type "NodePort") .Values.server.service.nodePort }}
+      nodePort: {{ .Values.server.service.nodePort }}
+      {{- end }}
+    - port: 8082
+      targetPort: 8082
+      name: grpc-flight

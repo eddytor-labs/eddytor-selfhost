@@ -1,0 +1,120 @@
+{{- if .Values.garage.bundled }}
+# Bundled single-node Garage for demos/local so you can create Delta tables
+# immediately against an in-cluster S3 endpoint. NOT for production (no HA).
+#
+# Garage is an S3-compatible object store by Deuxfleurs
+# (https://garagehq.deuxfleurs.fr), licensed AGPLv3. We bundle their published
+# image unmodified and credit them gratefully — it's a great piece of software.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "eddytor.garage.name" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+data:
+  # rpc_secret/admin_token here are DEMO placeholders (eval only). s3_region is
+  # pinned so storage-registration values match every other S3 backend.
+  garage.toml: |
+    metadata_dir = "/var/lib/garage/meta"
+    data_dir = "/var/lib/garage/data"
+    db_engine = "sqlite"
+    replication_factor = 1
+
+    rpc_bind_addr = "[::]:3901"
+    rpc_secret = {{ .Values.garage.rpcSecret | quote }}
+
+    [s3_api]
+    s3_region = {{ .Values.garage.region | quote }}
+    api_bind_addr = "[::]:3900"
+    root_domain = ".s3.garage.localhost"
+
+    [admin]
+    api_bind_addr = "[::]:3903"
+    admin_token = {{ .Values.garage.adminToken | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "eddytor.garage.name" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+    app: {{ include "eddytor.garage.name" . }}
+spec:
+  selector:
+    app: {{ include "eddytor.garage.name" . }}
+  ports:
+    - port: 3900
+      targetPort: 3900
+      name: s3
+    - port: 3903
+      targetPort: 3903
+      name: admin
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "eddytor.garage.name" . }}
+  labels:
+    {{- include "eddytor.labels" . | nindent 4 }}
+    app: {{ include "eddytor.garage.name" . }}
+spec:
+  serviceName: {{ include "eddytor.garage.name" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "eddytor.garage.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "eddytor.garage.name" . }}
+    spec:
+      containers:
+        - name: garage
+          image: {{ .Values.garage.image | quote }}
+          # --single-node --default-bucket auto-creates the access key + bucket
+          # from the GARAGE_DEFAULT_* env on first boot — no bucket-create Job.
+          args: ["/garage", "server", "--single-node", "--default-bucket"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.garage.resources | nindent 12 }}
+          ports:
+            - containerPort: 3900
+            - containerPort: 3903
+          env:
+            - name: GARAGE_DEFAULT_ACCESS_KEY
+              value: {{ .Values.garage.accessKey | quote }}
+            - name: GARAGE_DEFAULT_SECRET_KEY
+              value: {{ .Values.garage.secretKey | quote }}
+            - name: GARAGE_DEFAULT_BUCKET
+              value: {{ .Values.garage.bucket | quote }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/garage.toml
+              subPath: garage.toml
+            - name: data
+              mountPath: /var/lib/garage
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3903
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "eddytor.garage.name" . }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.garage.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.garage.storage }}
+{{- end }}

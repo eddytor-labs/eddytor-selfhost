@@ -1,0 +1,44 @@
+{{- define "eddytor.hpa" -}}
+{{- $name := .name -}}
+{{- $cfg := .cfg -}}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "eddytor.labels" .root | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $cfg.minReplicas }}
+  maxReplicas: {{ $cfg.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $cfg.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ $cfg.targetMemoryUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 300
+{{- end -}}
+{{- if .Values.server.autoscaling.enabled }}
+{{- include "eddytor.hpa" (dict "name" (include "eddytor.server.name" .) "cfg" .Values.server.autoscaling "root" .) }}
+{{- end }}
+{{- if .Values.engine.autoscaling.enabled }}
+---
+{{ include "eddytor.hpa" (dict "name" (include "eddytor.engine.name" .) "cfg" .Values.engine.autoscaling "root" .) }}
+{{- end }}

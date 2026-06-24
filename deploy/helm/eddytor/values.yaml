@@ -1,0 +1,204 @@
+# Default values for Eddytor. Production-leaning: external Postgres + object
+# store, ingress on, autoscaling on, no bundled dependencies.
+#
+# For a throwaway local cluster (k3d/kind/minikube/Docker Desktop) from a CLONED
+# repo, use `-f values-local.yaml` (bundles Postgres + Garage, NodePort, demo
+# secrets). Installing from the published OCI chart (which doesn't ship that
+# file)? Pass the same settings with --set — see HOSTING.md "Trying it locally".
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  registry: ghcr.io
+  repository: nordalf
+  # Server image: {registry}/{repository}/eddytor-ce-server:{tag}
+  # Engine image: {registry}/{repository}/eddytor-ce-engine:{tag}
+  # IMPORTANT: the chart needs the kubernetes-edition images (built with
+  # CARGO_FEATURES=kubernetes) so the server resolves engine replicas via DNS.
+  # Those are published under the `:k8s` / `:{version}-k8s` tags — NOT `:latest`
+  # (which is the community/compose edition).
+  tag: k8s
+  pullPolicy: IfNotPresent
+# imagePullSecrets:
+#   - name: ghcr-pull-secret
+imagePullSecrets: []
+
+# Non-secret config exposed via EDDYTOR__SECTION__KEY env overrides.
+config:
+  # Public URL clients reach the server on (sets cookies, OAuth redirects, JWKS).
+  publicUrl: "http://localhost:8080"
+  cookieDomain: "localhost"
+  # Empty => derived from publicUrl by the app.
+  oauthRedirectBase: ""
+  cors:
+    allowedOrigins: "http://localhost:*"
+    allowCredentials: true
+    maxAgeSecs: 86400
+  database:
+    maxConnections: 5
+  telemetry:
+    logLevel: ""      # empty => app default (info,datafusion_datasource=error,sqlx::postgres::notice=warn)
+    otlpEndpoint: ""
+
+# Secrets. Either let the chart create a Secret from `secrets.values`, or point
+# at one you manage out-of-band via `secrets.existingSecret`.
+secrets:
+  # If set, the chart references this existing Secret and ignores `values` below.
+  existingSecret: ""
+  # Keys written into the chart-managed Secret. Required ones must be non-empty.
+  values:
+    EDDYTOR_DATABASE_URL: ""        # required, e.g. postgres://user:pass@host:5432/eddytor
+    EDDYTOR_ENCRYPTION_KEY: ""      # required, base64 of exactly 32 random bytes
+    EDDYTOR_API_KEY_SECRET: ""      # required, HMAC secret for API keys (32+ bytes)
+    # Optional — set to enable. Empty values are skipped.
+    EDDYTOR_SMTP_HOST: ""
+    EDDYTOR_SMTP_PORT: ""
+    EDDYTOR_SMTP_FROM: ""
+    EDDYTOR_SMTP_USER: ""
+    EDDYTOR_SMTP_PASS: ""
+    # OAuth provider apps (Azure/Google delegated storage access) are configured
+    # per-organisation via the API/CLI, not env vars. See https://get.eddytor.com/HOSTING.md.
+
+server:
+  replicas: 2
+  # Server is the authoritative migrator: runs sqlx migrations at boot under a
+  # Postgres advisory lock (safe across replicas). Engine skips migrations.
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  pdb:
+    enabled: true
+    minAvailable: 1
+  service:
+    type: ClusterIP
+    # Stick a user to one server replica (in-memory OAuth pending sessions).
+    sessionAffinity: ClientIP
+
+engine:
+  replicas: 2
+  # Engine is stateless — scale freely. Server fans out to replicas via the
+  # headless Service DNS (consistent-hash on x-user-id when a mesh is present;
+  # plain round-robin otherwise — both correct since engine holds no state).
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+# Optional web UI (eddytor-ce-ui). Off by default — Eddytor is API-first; the
+# UI is a same-origin BFF that proxies to the server. Runs on its OWN origin, so
+# when enabled the chart registers `{ui.origin}/auth/callback` as a server web
+# redirect_uri. The UI releases on its own cadence, so `ui.image.tag` is
+# independent of the server/engine `image.tag`.
+ui:
+  enabled: false
+  image:
+    # Pulled from {image.registry}/{image.repository}/{ui.image.name}:{tag}.
+    name: eddytor-ce-ui
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  # Public origin the browser loads the UI from. MUST be reachable by users and
+  # is registered as the server web redirect_uri.
+  origin: "http://localhost:3000"
+  # Public server URL for the top-level OAuth redirect (browser navigation).
+  # Empty => falls back to config.publicUrl.
+  apiBaseUrl: ""
+  clientId: "eddytor-web"
+  # Empty => host-only cookie (correct for separate origins).
+  cookieDomain: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  service:
+    type: ClusterIP
+    nodePort: ""   # set when type is NodePort (local eval)
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: ""
+    tls: []
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: eddytor.local
+  tls: []
+  # tls:
+  #   - secretName: eddytor-tls
+  #     hosts: [eddytor.example.com]
+
+# Block server/engine boot until Postgres accepts TCP. Auto-forced on when
+# postgres.bundled is true. Useful for any DB that comes up alongside the chart.
+waitForDb:
+  enabled: false
+  image: busybox:1.36
+
+# Bundled single-replica Postgres for demos/local. NOT for production — no HA,
+# no backups. Provide an external EDDYTOR_DATABASE_URL instead in prod.
+postgres:
+  bundled: false
+  image: postgres:16-alpine
+  user: eddytor
+  password: eddytor
+  database: eddytor
+  storage: 5Gi
+  storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+# Bundled single-node Garage (AGPLv3, by Deuxfleurs — garagehq.deuxfleurs.fr)
+# for demos/local so you can create Delta tables immediately. NOT for production
+# (no HA). accessKey/secretKey/rpcSecret/adminToken below are DEMO placeholders;
+# supply your own for anything you keep. accessKey must be `GK` + 32 hex chars.
+garage:
+  bundled: false
+  image: dxflrs/garage:v2.3.0
+  accessKey: GK00000000000000000000000000000000
+  secretKey: "0000000000000000000000000000000000000000000000000000000000000000"
+  rpcSecret: "1111111111111111111111111111111111111111111111111111111111111111"
+  adminToken: eddytor-demo-admin-token
+  bucket: eddytor
+  region: us-east-1
+  storage: 10Gi
+  storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
