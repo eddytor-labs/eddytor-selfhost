@@ -271,10 +271,14 @@ kubectl -n eddytor create secret generic eddytor-secrets \
 
 helm upgrade --install eddytor oci://ghcr.io/nordalf/charts/eddytor -n eddytor \
   --set secrets.existingSecret=eddytor-secrets \
-  --set postgres.bundled=true --set garage.bundled=true
   --set config.publicUrl="https://eddytor.example.com" \
   --set ingress.enabled=true --set ingress.host=eddytor.example.com
 ```
+
+Production uses your own external Postgres + object store (the chart defaults
+`postgres.bundled` / `garage.bundled` to `false`). The three secrets above are the
+only ones you generate. Bundle the demo datastores only for local eval — see
+[Trying it locally](#trying-it-locally), where Garage also needs its own creds.
 
 The chart defaults to the **kubernetes-edition** images (`:k8s` tag, built with
 DNS engine discovery) — that's what lets the server fan out across engine
@@ -324,9 +328,18 @@ kubectl -n eddytor create secret generic eddytor-secrets \
 helm install eddytor oci://ghcr.io/nordalf/charts/eddytor -n eddytor \
   --set secrets.existingSecret=eddytor-secrets \
   --set postgres.bundled=true --set garage.bundled=true \
+  --set-string garage.accessKey="GK$(openssl rand -hex 16)" \
+  --set-string garage.secretKey="$(openssl rand -hex 32)" \
+  --set-string garage.rpcSecret="$(openssl rand -hex 32)" \
+  --set-string garage.adminToken="$(openssl rand -base64 32)" \
   --set server.service.type=NodePort --set server.service.nodePort=30080
 # server reachable at http://localhost:8080
 ```
+
+> Bundled Garage now requires its own credentials (no world-known defaults ship
+> in the public chart). The four `--set-string garage.*` lines above generate
+> them inline; `accessKey` must be `GK` + 32 hex chars. Omit them and the render
+> fails fast with a clear `garage.* is required` message.
 
 > Bundled single-replica Postgres/Garage are **evaluation only** — no HA, no
 > backups. Use external, backed-up datastores and real secrets in production.
@@ -347,7 +360,11 @@ Keeps the `localhost` URLs the chart defaults assume:
 ```bash
 helm install eddytor oci://ghcr.io/nordalf/charts/eddytor -n eddytor \
   --set secrets.existingSecret=eddytor-secrets \
-  --set postgres.bundled=true --set garage.bundled=true --set ui.enabled=true
+  --set postgres.bundled=true --set garage.bundled=true --set ui.enabled=true \
+  --set-string garage.accessKey="GK$(openssl rand -hex 16)" \
+  --set-string garage.secretKey="$(openssl rand -hex 32)" \
+  --set-string garage.rpcSecret="$(openssl rand -hex 32)" \
+  --set-string garage.adminToken="$(openssl rand -base64 32)"
 kubectl -n eddytor port-forward svc/eddytor-server 8080:8080 &
 kubectl -n eddytor port-forward svc/eddytor-ui     3000:3000 &   # if ui.enabled
 # server → http://localhost:8080, UI → http://localhost:3000
@@ -360,6 +377,10 @@ works where the node IP is routable from your host:
 helm install eddytor oci://ghcr.io/nordalf/charts/eddytor -n eddytor \
   --set secrets.existingSecret=eddytor-secrets \
   --set postgres.bundled=true --set garage.bundled=true --set ui.enabled=true \
+  --set-string garage.accessKey="GK$(openssl rand -hex 16)" \
+  --set-string garage.secretKey="$(openssl rand -hex 32)" \
+  --set-string garage.rpcSecret="$(openssl rand -hex 32)" \
+  --set-string garage.adminToken="$(openssl rand -base64 32)" \
   --set server.service.type=NodePort --set server.service.nodePort=30080 \
   --set ui.service.type=NodePort --set ui.service.nodePort=30300 \
   --set config.publicUrl=http://$(minikube ip):30080 \

@@ -69,6 +69,12 @@ postgres:
 garage:
   bundled: true
   storage: 5Gi
+  # Throwaway demo creds for local eval only — never reuse on a reachable
+  # cluster. Prod values.yaml leaves these empty so the chart fails fast there.
+  accessKey: GK00000000000000000000000000000000
+  secretKey: "0000000000000000000000000000000000000000000000000000000000000000"
+  rpcSecret: "1111111111111111111111111111111111111111111111111111111111111111"
+  adminToken: eddytor-demo-admin-token
 
 # Web UI on a NodePort so a host port-map can reach it (origin must match the
 # port you expose it on). publicUrl stays the server's localhost:8080.

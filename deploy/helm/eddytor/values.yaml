@@ -182,15 +182,17 @@ postgres:
 
 # Bundled single-node Garage (AGPLv3, by Deuxfleurs — garagehq.deuxfleurs.fr)
 # for demos/local so you can create Delta tables immediately. NOT for production
-# (no HA). accessKey/secretKey/rpcSecret/adminToken below are DEMO placeholders;
-# supply your own for anything you keep. accessKey must be `GK` + 32 hex chars.
+# (no HA). accessKey/secretKey/rpcSecret/adminToken are intentionally EMPTY: when
+# `bundled: true` the render fails fast unless you supply them (no world-known
+# defaults ship in the public chart). accessKey must be `GK` + 32 hex chars.
+# `values-local.yaml` provides throwaway demo creds for local eval.
 garage:
   bundled: false
   image: dxflrs/garage:v2.3.0
-  accessKey: GK00000000000000000000000000000000
-  secretKey: "0000000000000000000000000000000000000000000000000000000000000000"
-  rpcSecret: "1111111111111111111111111111111111111111111111111111111111111111"
-  adminToken: eddytor-demo-admin-token
+  accessKey: ""
+  secretKey: ""
+  rpcSecret: ""
+  adminToken: ""
   bucket: eddytor
   region: us-east-1
   storage: 10Gi

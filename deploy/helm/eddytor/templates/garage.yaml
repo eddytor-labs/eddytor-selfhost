@@ -21,7 +21,7 @@ data:
     replication_factor = 1
 
     rpc_bind_addr = "[::]:3901"
-    rpc_secret = {{ .Values.garage.rpcSecret | quote }}
+    rpc_secret = {{ required "garage.rpcSecret is required when garage.bundled=true — 64 hex chars" .Values.garage.rpcSecret | quote }}
 
     [s3_api]
     s3_region = {{ .Values.garage.region | quote }}
@@ -30,7 +30,7 @@ data:
 
     [admin]
     api_bind_addr = "[::]:3903"
-    admin_token = {{ .Values.garage.adminToken | quote }}
+    admin_token = {{ required "garage.adminToken is required when garage.bundled=true" .Values.garage.adminToken | quote }}
 ---
 apiVersion: v1
 kind: Service
@@ -85,9 +85,9 @@ spec:
             - containerPort: 3903
           env:
             - name: GARAGE_DEFAULT_ACCESS_KEY
-              value: {{ .Values.garage.accessKey | quote }}
+              value: {{ required "garage.accessKey is required when garage.bundled=true — `GK` + 32 hex chars" .Values.garage.accessKey | quote }}
             - name: GARAGE_DEFAULT_SECRET_KEY
-              value: {{ .Values.garage.secretKey | quote }}
+              value: {{ required "garage.secretKey is required when garage.bundled=true — 64 hex chars" .Values.garage.secretKey | quote }}
             - name: GARAGE_DEFAULT_BUCKET
               value: {{ .Values.garage.bucket | quote }}
           volumeMounts:
