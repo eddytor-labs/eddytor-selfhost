@@ -1,16 +1,20 @@
 apiVersion: v2
 name: eddytor
-description: Eddytor — Master Data Management on Delta Lake. Server (REST/gRPC/OAuth IdP) + horizontally scalable Engine (DataFusion/Delta).
+description: Eddytor — Master Data Management on Open Lakehouse Formats. Server (REST/gRPC/OAuth IdP) + horizontally scalable Engine.
 type: application
-version: 2.0.0
-appVersion: 2.0.0
-home: https://eddytor.dev
+version: 2.4.5
+appVersion: 2.4.5
+home: https://eddytor.com
 sources:
   - https://github.com/nordalf/eddytor
 keywords:
   - mdm
+  - master-data
   - delta-lake
-  - datafusion
+  - lakehouse
+  - object-store
+  - arrow
+  - iceberg
   - data
 maintainers:
   - name: Nordalf
