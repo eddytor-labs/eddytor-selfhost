@@ -613,14 +613,80 @@ grant blob data access) or `eddytor link provider google` — the browser opens
 for consent and the CLI waits for the link to land. Inspect links with
 `eddytor get providers`, remove one with `eddytor unlink provider <provider>`.
 
+To confirm *which* planes a link actually covers — the thing a successful link
+does not tell you — run:
+
+```bash
+eddytor get provider-consent azure
+# Linked: yes
+#   [ok] management   granted          https://management.azure.com/user_impersonation
+#   [!!] storage      consentRequired  https://storage.azure.com/user_impersonation
+#
+# → storage: run `eddytor link provider azure --azure-storage-access`
+```
+
+It acquires a token per plane (`GET /v1/auth/providers/azure/consent`), so it is
+a diagnostic, not something to poll — each check costs a provider round trip and
+rotates the stored refresh token. `unavailable` means the provider could not be
+reached and says nothing about consent.
+
+#### Azure: grant tenant-wide admin consent (strongly recommended)
+
+Azure issues a token for **one resource per authorize request**, so a user link
+covers either the control plane (browse subscriptions + storage accounts) or the
+data plane (read/write blobs) — never both. Users therefore have to run the link
+twice (`eddytor link provider azure`, then again with `--azure-storage-access`),
+and a user who stops after the first gets `provider_reauth_required` the moment
+they register a container.
+
+Admin consent has no such limit. `GET /v1/organisations/<org_id>/provider-apps`
+returns an `adminConsentUrl` for the Azure app plus the
+`requiredDelegatedPermissions` the app registration must declare. An admin opens
+that URL **once**: every declared delegated permission is granted for the whole
+tenant, after which users see no consent screen at all and a single link yields
+a grant usable for both planes.
+
+**Declare the permissions on the app registration first.** Not optional:
+`/authorize` uses *dynamic* consent (scopes travel in the request, nothing has to
+be pre-declared), but `/adminconsent` ignores the request and grants only what
+the registration's API-permissions list contains. An app that links fine
+per-user therefore fails admin consent with:
+
+```
+AADSTS1003031: Misconfigured required resource access in client application registration
+```
+
+That means the permissions list is empty or unresolvable — add the delegated
+permissions from step 5 below, then retry.
+
+After a successful grant each user still runs `eddytor link provider azure`
+**once**: admin consent authorises the application tenant-wide but issues no
+token, so Eddytor still needs a per-user grant to act on their behalf. That link
+completes without a consent screen, and one link now covers both planes.
+
 ### Microsoft Entra ID (Azure AD)
 
 1. **App registrations** → **New registration**. Name it _Eddytor_. **Supported account types**: single-tenant for org-only, multi-tenant for shared.
-2. **Redirect URI** (Web): `${public_url}/api/v1/auth/providers/azure/callback`. Replace `${public_url}` with your `server.public_url` (e.g. `https://app.eddytor.example.com`).
+2. **Redirect URI** (Web): `${public_url}/api/v1/auth/providers/azure/callback`. Replace `${public_url}` with your `server.public_url` (e.g. `https://app.eddytor.example.com`). Admin consent reuses this same URI — no second entry needed.
 3. Copy the **Application (client) ID** (and **Directory (tenant) ID** for single-tenant apps).
 4. **Certificates & secrets** → **New client secret** → 24-month expiry → copy the secret value.
-5. **API permissions** → add `openid`, `email`, `profile`, `offline_access`, `User.Read`, `https://storage.azure.com/user_impersonation`, and `https://management.azure.com/user_impersonation`. Grant admin consent.
+5. **API permissions** → add the delegated permissions below. All are *delegated*, not application.
+
+   | API | Permissions | Needed for |
+   |-----|-------------|-----------|
+   | **Microsoft Graph** | `openid`, `offline_access`, `email`, `profile`, `User.Read` | Sign-in + identity. **`offline_access` is mandatory** — no refresh token without it, so links break after the first hour. |
+   | **Azure Storage** (`e406a681-f3d4-42a8-90b6-c2b029497af1`) | `user_impersonation` | **Required.** Reading and writing blobs — this is the one that makes storage work. |
+   | **Azure Service Management** (`797f4846-ba00-4fd7-ba43-dac1f8f63013`) | `user_impersonation` | **Optional.** Only the storage-account browser (`GET /v1/azure/storage-accounts`, which lists subscriptions → accounts → containers). Skip it and registration still works — callers just supply `accountName` + `container` directly. Also needs subscription-scope `Reader` in Azure RBAC to return anything. |
+
+   If the picker doesn't list an API by name, search it by the GUID above.
+
+   Two errors point straight back to this step:
+   - `AADSTS650051: … does not exist in client application's RequiredResourceAccess` — the scope being requested isn't declared here. Check you edited the *same* app registration whose client id is in `eddytor get provider-app azure`, and that the `user_impersonation` you added belongs to **Azure Storage** (several APIs expose a scope with that name). Tenants that disable user consent take this static path for ordinary links too, not just admin consent.
+   - `AADSTS1003031` — see the admin-consent note above.
 6. Store the client id / secret / tenant with `eddytor set provider-app azure …`.
+7. **Grant admin consent** — Portal button, or open the `adminConsentUrl` from
+   `eddytor get provider-app azure`. Skipping this is supported but forces every
+   user through two consent screens (see above).
 
 ### Google Workspace
 
