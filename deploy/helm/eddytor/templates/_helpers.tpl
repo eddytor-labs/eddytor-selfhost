@@ -54,6 +54,8 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
   value: {{ .Values.config.publicUrl | quote }}
 - name: EDDYTOR__SERVER__COOKIE_DOMAIN
   value: {{ .Values.config.cookieDomain | quote }}
+- name: EDDYTOR__SERVER__TRUSTED_PROXY_HOPS
+  value: {{ .Values.config.trustedProxyHops | quote }}
 {{- with .Values.config.oauthRedirectBase }}
 - name: EDDYTOR__SERVER__OAUTH_REDIRECT_BASE
   value: {{ . | quote }}

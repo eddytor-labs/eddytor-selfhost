@@ -31,6 +31,19 @@ config:
   cookieDomain: "localhost"
   # Empty => derived from publicUrl by the app.
   oauthRedirectBase: ""
+  # Trusted reverse-proxy hops in front of the server, counted in from the RIGHT
+  # of X-Forwarded-For (proxies append, so the left is client-written). Rate
+  # limiting buckets by client IP and needs this to find it.
+  #
+  # 0 = ignore the header, bucket by socket peer. Safe default, and correct when
+  # the Service is reached directly. Set 1 when an ingress controller terminates
+  # traffic and appends the client address; add one per additional proxy (e.g. a
+  # cloud LB in front of the ingress that also appends).
+  #
+  # Getting it too HIGH is a security bug: the value read becomes attacker-
+  # controlled and every rate limit can be bypassed with one header. Too LOW is
+  # an availability bug: all callers share one bucket.
+  trustedProxyHops: 0
   cors:
     allowedOrigins: "http://localhost:*"
     allowCredentials: true
