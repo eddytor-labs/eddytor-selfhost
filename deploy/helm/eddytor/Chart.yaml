@@ -2,8 +2,8 @@ apiVersion: v2
 name: eddytor
 description: Eddytor — Master Data Management on Open Lakehouse Formats. Server (REST/gRPC/OAuth IdP) + horizontally scalable Engine.
 type: application
-version: 2.7.4
-appVersion: 2.7.4
+version: 2.7.5
+appVersion: 2.7.5
 home: https://eddytor.com
 sources:
   - https://github.com/nordalf/eddytor
