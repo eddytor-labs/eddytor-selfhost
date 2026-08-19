@@ -41,4 +41,4 @@ object store that come up alongside the chart (eval only, no HA/backups):
   --set-string garage.adminToken="$(openssl rand -base64 32)"
 ```
 
-Current version: **v2.8.2** (see the matching `v2.8.2` git tag).
+Current version: **v2.8.3** (see the matching `v2.8.3` git tag).
