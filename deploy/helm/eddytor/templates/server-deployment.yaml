@@ -22,6 +22,9 @@ spec:
       labels:
         {{- include "eddytor.labels" . | nindent 8 }}
         app: {{ include "eddytor.server.name" . }}
+        {{- with .Values.server.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "eddytor.server.name" . }}
       terminationGracePeriodSeconds: 60
@@ -48,6 +51,7 @@ spec:
           env:
             {{- include "eddytor.configEnv" . | nindent 12 }}
             {{- include "eddytor.secretEnv" . | nindent 12 }}
+            {{- include "eddytor.mailEnv" . | nindent 12 }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp

@@ -95,11 +95,9 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
   value: {{ printf "http://%s:8080/.well-known/jwks.json" (include "eddytor.server.name" .) | quote }}
 {{- end -}}
 
-{{/* Secret-backed env. Required keys always; optional keys only when present
-     in chart-managed values (existingSecret => emit all, optional). */}}
+{{/* Required secret-backed env, shared by server and engine. */}}
 {{- define "eddytor.secretEnv" -}}
 {{- $secret := include "eddytor.secretName" . -}}
-{{- $optional := list "EDDYTOR_SMTP_HOST" "EDDYTOR_SMTP_PORT" "EDDYTOR_SMTP_FROM" "EDDYTOR_SMTP_USER" "EDDYTOR_SMTP_PASS" -}}
 {{- $required := list "EDDYTOR_DATABASE_URL" "EDDYTOR_ENCRYPTION_KEY" "EDDYTOR_API_KEY_SECRET" -}}
 {{- range $required }}
 - name: {{ . }}
@@ -107,6 +105,41 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
     secretKeyRef:
       name: {{ $secret }}
       key: {{ . }}
+{{- end }}
+{{- end -}}
+
+{{/* Mail config + secret env. Server only: the engine sends no mail, so it
+     gets neither the mail settings nor the SMTP / Graph credentials. Optional
+     secret keys only when present in chart-managed values (existingSecret =>
+     emit all, optional). */}}
+{{- define "eddytor.mailEnv" -}}
+{{- $secret := include "eddytor.secretName" . -}}
+{{- $optional := list "EDDYTOR_SMTP_HOST" "EDDYTOR_SMTP_PORT" "EDDYTOR_SMTP_FROM" "EDDYTOR_SMTP_USER" "EDDYTOR_SMTP_PASS" "EDDYTOR_SMTP_TLS" "EDDYTOR_MAIL_CLIENT_SECRET" -}}
+{{- with .Values.config.mail }}
+{{- with .provider }}
+- name: EDDYTOR__MAIL__PROVIDER
+  value: {{ . | quote }}
+{{- end }}
+{{- with .from }}
+- name: EDDYTOR__MAIL__FROM
+  value: {{ . | quote }}
+{{- end }}
+{{- with .tenantId }}
+- name: EDDYTOR__MAIL__TENANT_ID
+  value: {{ . | quote }}
+{{- end }}
+{{- with .clientId }}
+- name: EDDYTOR__MAIL__CLIENT_ID
+  value: {{ . | quote }}
+{{- end }}
+{{- with .credential }}
+- name: EDDYTOR__MAIL__CREDENTIAL
+  value: {{ . | quote }}
+{{- end }}
+{{- with .smtpAuth }}
+- name: EDDYTOR__MAIL__SMTP_AUTH
+  value: {{ . | quote }}
+{{- end }}
 {{- end }}
 {{- range $k := $optional }}
 {{- if or $.Values.secrets.existingSecret (index $.Values.secrets.values $k) }}

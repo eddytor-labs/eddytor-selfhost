@@ -217,6 +217,19 @@ EDDYTOR_BIND_ADDR=127.0.0.1
 # EDDYTOR_SMTP_FROM=eddytor@acme.com
 # EDDYTOR_SMTP_USER=
 # EDDYTOR_SMTP_PASS=
+# EDDYTOR_SMTP_TLS=starttls   # or implicit | none; unset = follows the port
+# Microsoft 365 without an SMTP password: send through Microsoft Graph as an
+# Entra app instead (see HOSTING.md "Mail via Microsoft Graph").
+# EDDYTOR__MAIL__PROVIDER=graph
+# EDDYTOR__MAIL__FROM=eddytor@acme.com
+# EDDYTOR__MAIL__TENANT_ID=
+# EDDYTOR__MAIL__CLIENT_ID=
+# EDDYTOR__MAIL__CREDENTIAL=client_secret
+# EDDYTOR_MAIL_CLIENT_SECRET=
+# Or keep SMTP and log in with the same Entra app (XOAUTH2): set
+# EDDYTOR_SMTP_HOST=smtp.office365.com, EDDYTOR_SMTP_FROM, the TENANT_ID /
+# CLIENT_ID / CREDENTIAL lines above, and
+# EDDYTOR__MAIL__SMTP_AUTH=xoauth2
 EOF
   if [ "$WITH_UI" = "true" ]; then
     cat >> "${DIR}/.env" <<EOF
@@ -408,7 +421,7 @@ if [ "$SETUP_OK" = "true" ]; then
     # create-api-key prints the key on its own indented line — pull the edd_live_… token.
     # --expires-in-minutes scopes this one-shot Admin key to the seed window so it
     # self-revokes even if the steps below die mid-run (no long-lived root key left in the DB).
-    KEY="$( cd "$DIR" && $DC exec -T eddytor-server eddytoradm create-api-key --email "$EMAIL" --name installer-bootstrap --expires-in-minutes 10 </dev/null 2>/dev/null \
+    KEY="$( cd "$DIR" && $DC exec -T eddytor-server eddytoradm create-api-key --email "$EMAIL" --name "installer-bootstrap-$(date -u +%Y%m%dT%H%M%SZ)" --expires-in-minutes 10 </dev/null 2>/dev/null \
               | grep -oE 'edd_live_[A-Za-z0-9_-]+' | head -1 )"
     if [ -z "$KEY" ]; then
       info "could not mint an API key — skipping the demo seed (do it later; see 'Storage & demo table' below)."

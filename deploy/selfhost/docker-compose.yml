@@ -21,7 +21,8 @@
 #
 # Mail: with no SMTP configured (default), sign-in magic links are written to
 # the server logs (`docker compose logs eddytor-server`). Set EDDYTOR_SMTP_* in
-# .env to deliver real email to your users.
+# .env to deliver real email to your users, or EDDYTOR__MAIL__* to send through
+# Microsoft Graph (see HOSTING.md).
 #
 # Upgrade: re-run the installer (it re-downloads this file and bumps
 # EDDYTOR_VERSION in .env), or bump .env yourself and `docker compose pull && up -d`.

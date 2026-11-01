@@ -53,6 +53,17 @@ config:
   telemetry:
     logLevel: ""      # empty => app default (info,datafusion_datasource=error,sqlx::postgres::notice=warn)
     otlpEndpoint: ""
+  # Outbound mail backend. Empty provider => SMTP when EDDYTOR_SMTP_HOST is set
+  # (secrets below), else magic links are logged to stdout. "graph" sends via
+  # Microsoft Graph as an Entra app — see HOSTING.md "Mail via Microsoft Graph".
+  # Server-only: the engine sends no mail and gets none of these (nor the mail secrets).
+  mail:
+    provider: ""      # "" | smtp | graph
+    from: ""          # graph: sender mailbox, e.g. eddytor@contoso.com
+    tenantId: ""      # graph: Entra tenant id (workload identity injects AZURE_TENANT_ID instead)
+    clientId: ""      # graph: app (client) id; managed identity: user-assigned id, or empty for system-assigned
+    credential: ""    # graph / xoauth2: client_secret | workload_identity | managed_identity
+    smtpAuth: ""      # smtp: "" (password) | xoauth2 — log in to smtp.office365.com as the Entra app above
 
 # Secrets. Either let the chart create a Secret from `secrets.values`, or point
 # at one you manage out-of-band via `secrets.existingSecret`.
@@ -70,6 +81,8 @@ secrets:
     EDDYTOR_SMTP_FROM: ""
     EDDYTOR_SMTP_USER: ""
     EDDYTOR_SMTP_PASS: ""
+    EDDYTOR_SMTP_TLS: ""            # starttls | implicit | none; default follows the port (587 starttls, 465 implicit)
+    EDDYTOR_MAIL_CLIENT_SECRET: ""  # config.mail.credential = client_secret only
     # OAuth provider apps (Azure/Google delegated storage access) are configured
     # per-organisation via the API/CLI, not env vars. See https://get.eddytor.com/HOSTING.md.
 
@@ -97,6 +110,14 @@ server:
     type: ClusterIP
     # Stick a user to one server replica (in-memory OAuth pending sessions).
     sessionAffinity: ClientIP
+  # Azure workload identity for Graph mail (config.mail.credential =
+  # workload_identity): annotate the server ServiceAccount with
+  #   azure.workload.identity/client-id: "<app-or-managed-identity-client-id>"
+  # and label the pod with
+  #   azure.workload.identity/use: "true"
+  serviceAccount:
+    annotations: {}
+  podLabels: {}
 
 engine:
   replicas: 2
